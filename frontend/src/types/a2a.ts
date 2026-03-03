@@ -83,7 +83,14 @@ export type ParsedEventType =
   | 'reasoning'
   | 'task-status'
   | 'artifact'
-  | 'error';
+  | 'error'
+  | 'status-update-empty';
+
+export interface ParsedToolCall {
+  toolName: string;
+  toolInput?: string;
+  toolOutput?: string;
+}
 
 export interface ParsedA2AEvent {
   type: ParsedEventType;
@@ -94,6 +101,7 @@ export interface ParsedA2AEvent {
   toolName?: string;
   toolInput?: string;
   toolOutput?: string;
+  toolCalls?: ParsedToolCall[];
   taskState?: string;
   artifacts?: A2AArtifact[];
   validationErrors: string[];

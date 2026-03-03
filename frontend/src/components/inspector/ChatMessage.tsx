@@ -1,5 +1,5 @@
-import {useCallback} from 'react';
-import {CheckCircle2, AlertTriangle, Copy, Wrench, Brain, FileText, AlertCircle, Activity} from 'lucide-react';
+import {useCallback, useState} from 'react';
+import {CheckCircle2, AlertTriangle, Copy, Wrench, FileText, AlertCircle, Activity, ChevronDown, ChevronRight, Ban, CircleCheck, CirclePause, Clock} from 'lucide-react';
 import {
   Message,
   MessageContent,
@@ -8,44 +8,17 @@ import {
   MessageAction,
 } from '@/components/ai-elements/message';
 import {
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
-} from '@/components/ai-elements/reasoning';
-import {
   CodeBlock,
   CodeBlockCopyButton,
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
 import {cn} from '@/lib/utils';
-import type {ChatMessage as ChatMessageType, Attachment, A2APart} from '@/types/a2a';
+import type {ChatMessage as ChatMessageType, Attachment, A2APart, ParsedToolCall} from '@/types/a2a';
 
 interface ChatMessageProps {
   message: ChatMessageType;
   onClickMessage: (message: ChatMessageType) => void;
-}
-
-function KindChip({kind, className}: {kind: string; className?: string}) {
-  const colorMap: Record<string, string> = {
-    'task': 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
-    'status-update': 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800',
-    'artifact-update': 'bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
-    'message': 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800',
-    'error': 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
-  };
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
-        colorMap[kind] || 'bg-muted text-muted-foreground border-border',
-        className,
-      )}
-    >
-      {kind}
-    </span>
-  );
 }
 
 function ValidationBadge({errors}: {errors: string[]}) {
@@ -119,6 +92,65 @@ function MultimediaPart({part}: {part: A2APart}) {
   );
 }
 
+/** Single tool call card — collapsible */
+function ToolCallCard({tc, defaultOpen}: {tc: ParsedToolCall; defaultOpen: boolean}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/50">
+      <button
+        className="flex w-full items-center gap-2 p-2 text-left"
+        onClick={e => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+      >
+        {isOpen ? <ChevronDown className="size-3 text-muted-foreground" /> : <ChevronRight className="size-3 text-muted-foreground" />}
+        <Wrench className="size-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium">{tc.toolName}</span>
+      </button>
+      {isOpen && (
+        <div className="border-t border-border p-2">
+          {tc.toolInput && (
+            <CodeBlock code={tc.toolInput} language="json">
+              <CodeBlockHeader>
+                <CodeBlockTitle>Input</CodeBlockTitle>
+                <CodeBlockCopyButton />
+              </CodeBlockHeader>
+            </CodeBlock>
+          )}
+          {tc.toolOutput && (
+            <div className="mt-2">
+              <MessageResponse>{tc.toolOutput}</MessageResponse>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Compact task state chip */
+function TaskStateChip({state}: {state: string}) {
+  const config: Record<string, {icon: typeof CircleCheck; color: string; label: string}> = {
+    completed: {icon: CircleCheck, color: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-900', label: 'Completed'},
+    canceled: {icon: Ban, color: 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-900', label: 'Canceled'},
+    failed: {icon: AlertCircle, color: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-900', label: 'Failed'},
+    'input-required': {icon: CirclePause, color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-900', label: 'Input Required'},
+    working: {icon: Clock, color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-900', label: 'Working'},
+  };
+
+  const c = config[state] || config.working;
+  const Icon = c.icon;
+
+  return (
+    <div className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium', c.color)}>
+      <Icon className="size-3" />
+      {c.label}
+    </div>
+  );
+}
+
 export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps) {
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(message.content);
@@ -154,106 +186,53 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
     );
   }
 
-  const eventKind = parsed.event.kind;
-
   switch (parsed.type) {
-    case 'tool-call':
-      return (
-        <div onClick={() => onClickMessage(message)} className="cursor-pointer">
-          <Message from="assistant">
-            <MessageContent>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <KindChip kind={eventKind} />
-                  <ValidationBadge errors={parsed.validationErrors} />
-                </div>
-                <div className="rounded-lg border border-border bg-muted/50 p-3">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Wrench className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{parsed.toolName}</span>
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        parsed.isFinal
-                          ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-                      )}
-                    >
-                      {parsed.isFinal ? 'completed' : parsed.taskState || 'running'}
-                    </span>
-                  </div>
-                  {parsed.toolInput && (
-                    <CodeBlock code={parsed.toolInput} language="json">
-                      <CodeBlockHeader>
-                        <CodeBlockTitle>Input</CodeBlockTitle>
-                        <CodeBlockCopyButton />
-                      </CodeBlockHeader>
-                    </CodeBlock>
-                  )}
-                  {parsed.toolOutput && (
-                    <div className="mt-2">
-                      <MessageResponse>{parsed.toolOutput}</MessageResponse>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </MessageContent>
-          </Message>
-        </div>
-      );
+    // Tool call(s) — each tool call gets its own card, last one expanded
+    case 'tool-call': {
+      const calls = parsed.toolCalls || (parsed.toolName ? [{toolName: parsed.toolName, toolInput: parsed.toolInput, toolOutput: parsed.toolOutput}] : []);
+      const terminalStates = ['completed', 'canceled', 'failed', 'input-required'];
+      const showStateChip = parsed.taskState && terminalStates.includes(parsed.taskState);
 
-    case 'reasoning':
       return (
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
-              <div className="flex items-center gap-2">
-                <KindChip kind={eventKind} />
+              <div className="space-y-1.5">
+                {calls.map((tc, i) => (
+                  <ToolCallCard
+                    key={i}
+                    tc={tc}
+                    defaultOpen={i === calls.length - 1}
+                  />
+                ))}
+              </div>
+              <div className="mt-1.5 flex items-center gap-2">
+                {showStateChip && <TaskStateChip state={parsed.taskState!} />}
                 <ValidationBadge errors={parsed.validationErrors} />
               </div>
-              <Reasoning isStreaming={!parsed.isFinal} defaultOpen={!parsed.isFinal}>
-                <ReasoningTrigger />
-                <ReasoningContent>{parsed.textContent || ''}</ReasoningContent>
-              </Reasoning>
             </MessageContent>
           </Message>
         </div>
       );
+    }
 
+    // Task status — compact chip, clickable for raw JSON
     case 'task-status':
       return (
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
               <div className="flex items-center gap-2">
-                <KindChip kind={eventKind} />
+                <TaskStateChip state={parsed.taskState || 'working'} />
                 <ValidationBadge errors={parsed.validationErrors} />
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 p-3">
-                <Activity className="size-4 text-muted-foreground" />
-                <span className="text-sm">
-                  Task status:{' '}
-                  <span
-                    className={cn(
-                      'font-medium',
-                      parsed.taskState === 'completed'
-                        ? 'text-green-600 dark:text-green-400'
-                        : parsed.taskState === 'failed'
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-blue-600 dark:text-blue-400',
-                    )}
-                  >
-                    {parsed.taskState}
-                  </span>
-                </span>
               </div>
             </MessageContent>
           </Message>
         </div>
       );
 
+    // Artifact — structured content container
     case 'artifact': {
-      // Render artifact parts (text, files, data)
       const artifactParts =
         parsed.event.artifact?.parts ||
         parsed.artifacts?.flatMap(a => a.parts || []) ||
@@ -263,14 +242,11 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
-              <div className="flex items-center gap-2">
-                <KindChip kind={eventKind} />
-                <ValidationBadge errors={parsed.validationErrors} />
-              </div>
               <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-3">
                 <div className="flex items-center gap-2">
                   <FileText className="size-4 text-muted-foreground" />
                   <span className="text-sm font-medium">Artifact</span>
+                  <ValidationBadge errors={parsed.validationErrors} />
                 </div>
                 {artifactParts.map((part, i) => (
                   <div key={i}>
@@ -280,8 +256,7 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
                       <CodeBlock
                         code={JSON.stringify(part.data, null, 2)}
                         language="json"
-                      >
-                        </CodeBlock>
+                      />
                     )}
                   </div>
                 ))}
@@ -292,15 +267,12 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
       );
     }
 
+    // Error — red-tinted
     case 'error':
       return (
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
-              <div className="flex items-center gap-2">
-                <KindChip kind="error" />
-                <ValidationBadge errors={parsed.validationErrors} />
-              </div>
               <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
                 <AlertCircle className="size-4" />
                 <span className="text-sm">{parsed.textContent}</span>
@@ -310,22 +282,20 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
         </div>
       );
 
+    // Agent message (normal text response) — clean, no badges
     case 'agent-message':
     default:
       return (
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
-              <div className="flex items-center gap-2">
-                <KindChip kind={eventKind} />
-                <ValidationBadge errors={parsed.validationErrors} />
-              </div>
               <MessageResponse>{parsed.textContent || ''}</MessageResponse>
             </MessageContent>
             <MessageActions>
               <MessageAction tooltip="Copy" onClick={handleCopy}>
                 <Copy className="size-3.5" />
               </MessageAction>
+              <ValidationBadge errors={parsed.validationErrors} />
             </MessageActions>
           </Message>
         </div>

@@ -77,7 +77,7 @@ describe('parseA2AEvent', () => {
       expect(parsed.toolOutput).toBe('The file contains hello world');
     });
 
-    it('should parse non-tool status-update as reasoning', () => {
+    it('should parse non-tool status-update with text as agent-message', () => {
       const event = makeEvent({
         kind: 'status-update',
         status: {
@@ -89,8 +89,58 @@ describe('parseA2AEvent', () => {
       });
       const parsed = parseA2AEvent(event, 'display-5');
 
-      expect(parsed.type).toBe('reasoning');
+      expect(parsed.type).toBe('agent-message');
       expect(parsed.textContent).toBe('Analyzing the image...');
+    });
+
+    it('should parse empty status-update (no message, working state) as status-update-empty', () => {
+      const event = makeEvent({
+        kind: 'status-update',
+        status: {
+          state: 'working',
+        },
+      });
+      const parsed = parseA2AEvent(event, 'display-empty');
+
+      expect(parsed.type).toBe('status-update-empty');
+      expect(parsed.textContent).toBe('');
+    });
+
+    it('should parse empty status-update with terminal state as task-status', () => {
+      const event = makeEvent({
+        kind: 'status-update',
+        status: {
+          state: 'canceled',
+        },
+      });
+      const parsed = parseA2AEvent(event, 'display-canceled');
+
+      expect(parsed.type).toBe('task-status');
+      expect(parsed.taskState).toBe('canceled');
+    });
+
+    it('should parse multiple tool calls from multiple parts', () => {
+      const event = makeEvent({
+        kind: 'status-update',
+        status: {
+          state: 'canceled',
+          message: {
+            parts: [
+              {kind: 'text', text: '[Tool: TodoWrite]\n{"todos": []}'},
+              {kind: 'text', text: '[Tool: Bash]\n{"command": "mkdir -p /tmp/test"}'},
+              {kind: 'text', text: '[Tool: Write]\n{"file_path": "/tmp/test.txt", "content": "hello"}'},
+            ],
+          },
+        },
+      });
+      const parsed = parseA2AEvent(event, 'display-multi-tool');
+
+      expect(parsed.type).toBe('tool-call');
+      expect(parsed.toolCalls).toHaveLength(3);
+      expect(parsed.toolCalls![0].toolName).toBe('TodoWrite');
+      expect(parsed.toolCalls![1].toolName).toBe('Bash');
+      expect(parsed.toolCalls![2].toolName).toBe('Write');
+      expect(parsed.taskState).toBe('canceled');
     });
 
     it('should handle final flag', () => {

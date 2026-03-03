@@ -1,13 +1,14 @@
-import {useState, useCallback, useEffect, type RefObject} from 'react';
+import {useState, useCallback, useEffect, useRef, type RefObject} from 'react';
 import type {Socket} from 'socket.io-client';
 import type {
   AgentResponseEvent,
   ChatMessage,
   Attachment,
-  ParsedA2AEvent,
 } from '@/types/a2a';
 import {parseA2AEvent} from '@/lib/parseA2AEvent';
 import DOMPurify from 'dompurify';
+
+let displayIdCounter = 0;
 
 export function useA2AChat(socketRef: RefObject<Socket | null>) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -22,19 +23,26 @@ export function useA2AChat(socketRef: RefObject<Socket | null>) {
     if (!socket) return;
 
     const handleResponse = (event: AgentResponseEvent) => {
-      setIsLoading(false);
-
-      const displayId = `display-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-      // Store raw event
-      setRawEventStore(prev => ({...prev, [displayId]: event}));
-
       // Update context ID
       if (event.contextId) {
         setContextId(event.contextId);
       }
 
+      const displayId = `display-${++displayIdCounter}`;
       const parsed = parseA2AEvent(event, displayId);
+
+      // Skip empty status-updates (just "working" heartbeats).
+      if (parsed.type === 'status-update-empty') {
+        return;
+      }
+
+      // For final events, stop loading
+      if (parsed.isFinal) {
+        setIsLoading(false);
+      }
+
+      // Store raw event keyed by display id
+      setRawEventStore(prev => ({...prev, [displayId]: event}));
 
       const msg: ChatMessage = {
         id: displayId,
@@ -45,7 +53,46 @@ export function useA2AChat(socketRef: RefObject<Socket | null>) {
         timestamp: Date.now(),
       };
 
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => {
+        // For agent-message type: if an existing message from the same event.id
+        // has the same text, replace it (dedup final/non-final with identical content).
+        // This prevents the "same response shown twice" problem.
+        if (parsed.type === 'agent-message') {
+          const existingIdx = prev.findIndex(
+            m =>
+              m.role === 'agent' &&
+              m.parsedEvent?.type === 'agent-message' &&
+              m.rawEvent?.id === event.id &&
+              m.content === msg.content,
+          );
+
+          if (existingIdx !== -1) {
+            const updated = [...prev];
+            updated[existingIdx] = msg;
+            return updated;
+          }
+        }
+
+        // For task-status: replace existing task-status for the same event id
+        // (state transitions update in place: working → completed → canceled)
+        if (parsed.type === 'task-status') {
+          const existingIdx = prev.findIndex(
+            m =>
+              m.role === 'agent' &&
+              m.parsedEvent?.type === 'task-status' &&
+              m.rawEvent?.id === event.id,
+          );
+
+          if (existingIdx !== -1) {
+            const updated = [...prev];
+            updated[existingIdx] = msg;
+            return updated;
+          }
+        }
+
+        // Everything else (tool-call, artifact, error, different text): append
+        return [...prev, msg];
+      });
     };
 
     socket.on('agent_response', handleResponse);
