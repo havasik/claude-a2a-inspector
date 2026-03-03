@@ -22,6 +22,7 @@ export interface A2APart {
   text?: string;
   file?: FileContent;
   data?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface A2AArtifact {
@@ -92,6 +93,23 @@ export interface ParsedToolCall {
   toolOutput?: string;
 }
 
+export interface A2AQuestionOption {
+  label: string;
+  description?: string;
+  markdown?: string;
+}
+
+export interface A2AQuestion {
+  question: string;
+  header?: string;
+  multiSelect: boolean;
+  options: A2AQuestionOption[];
+}
+
+export interface A2AInputRequired {
+  questions: A2AQuestion[];
+}
+
 export interface ParsedA2AEvent {
   type: ParsedEventType;
   event: AgentResponseEvent;
@@ -102,6 +120,8 @@ export interface ParsedA2AEvent {
   toolInput?: string;
   toolOutput?: string;
   toolCalls?: ParsedToolCall[];
+  thinkingSteps?: string[];
+  inputRequired?: A2AInputRequired;
   taskState?: string;
   artifacts?: A2AArtifact[];
   validationErrors: string[];

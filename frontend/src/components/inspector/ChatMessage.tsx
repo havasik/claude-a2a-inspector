@@ -1,5 +1,5 @@
 import {useCallback, useState} from 'react';
-import {CheckCircle2, AlertTriangle, Copy, Wrench, FileText, AlertCircle, Activity, ChevronDown, ChevronRight, Ban, CircleCheck, CirclePause, Clock} from 'lucide-react';
+import {CheckCircle2, AlertTriangle, Copy, Wrench, FileText, AlertCircle, Activity, ChevronDown, ChevronRight, Ban, CircleCheck, CirclePause, Clock, BrainIcon} from 'lucide-react';
 import {
   Message,
   MessageContent,
@@ -8,17 +8,25 @@ import {
   MessageAction,
 } from '@/components/ai-elements/message';
 import {
+  ChainOfThought,
+  ChainOfThoughtHeader,
+  ChainOfThoughtContent,
+  ChainOfThoughtStep,
+} from '@/components/ai-elements/chain-of-thought';
+import {
   CodeBlock,
   CodeBlockCopyButton,
   CodeBlockHeader,
   CodeBlockTitle,
 } from '@/components/ai-elements/code-block';
 import {cn} from '@/lib/utils';
+import {InteractiveQuestion} from './InteractiveQuestion';
 import type {ChatMessage as ChatMessageType, Attachment, A2APart, ParsedToolCall} from '@/types/a2a';
 
 interface ChatMessageProps {
   message: ChatMessageType;
   onClickMessage: (message: ChatMessageType) => void;
+  onSendResponse?: (text: string) => void;
 }
 
 function ValidationBadge({errors}: {errors: string[]}) {
@@ -92,9 +100,30 @@ function MultimediaPart({part}: {part: A2APart}) {
   );
 }
 
+/** Thinking steps rendered as ChainOfThought */
+function ThinkingBlock({steps}: {steps: string[]}) {
+  return (
+    <div onClick={e => e.stopPropagation()}>
+      <ChainOfThought defaultOpen={false}>
+        <ChainOfThoughtHeader>Thinking</ChainOfThoughtHeader>
+        <ChainOfThoughtContent>
+          {steps.map((step, i) => (
+            <ChainOfThoughtStep
+              key={i}
+              icon={BrainIcon}
+              label={step}
+              status="complete"
+            />
+          ))}
+        </ChainOfThoughtContent>
+      </ChainOfThought>
+    </div>
+  );
+}
+
 /** Single tool call card — collapsible */
-function ToolCallCard({tc, defaultOpen}: {tc: ParsedToolCall; defaultOpen: boolean}) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+function ToolCallCard({tc}: {tc: ParsedToolCall}) {
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <div className="rounded-lg border border-border bg-muted/50">
@@ -120,8 +149,9 @@ function ToolCallCard({tc, defaultOpen}: {tc: ParsedToolCall; defaultOpen: boole
             </CodeBlock>
           )}
           {tc.toolOutput && (
-            <div className="mt-2">
-              <MessageResponse>{tc.toolOutput}</MessageResponse>
+            <div className="mt-2 rounded border border-border bg-background p-2">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Output</div>
+              <pre className="whitespace-pre-wrap text-xs">{tc.toolOutput}</pre>
             </div>
           )}
         </div>
@@ -151,7 +181,7 @@ function TaskStateChip({state}: {state: string}) {
   );
 }
 
-export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps) {
+export function ChatMessageComponent({message, onClickMessage, onSendResponse}: ChatMessageProps) {
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(message.content);
   }, [message.content]);
@@ -197,15 +227,26 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
+              {parsed.thinkingSteps && parsed.thinkingSteps.length > 0 && (
+                <ThinkingBlock steps={parsed.thinkingSteps} />
+              )}
               <div className="space-y-1.5">
                 {calls.map((tc, i) => (
                   <ToolCallCard
                     key={i}
                     tc={tc}
-                    defaultOpen={i === calls.length - 1}
                   />
                 ))}
               </div>
+              {parsed.textContent && (
+                <MessageResponse>{parsed.textContent}</MessageResponse>
+              )}
+              {parsed.inputRequired && onSendResponse && (
+                <InteractiveQuestion
+                  inputRequired={parsed.inputRequired}
+                  onSubmit={onSendResponse}
+                />
+              )}
               <div className="mt-1.5 flex items-center gap-2">
                 {showStateChip && <TaskStateChip state={parsed.taskState!} />}
                 <ValidationBadge errors={parsed.validationErrors} />
@@ -289,7 +330,18 @@ export function ChatMessageComponent({message, onClickMessage}: ChatMessageProps
         <div onClick={() => onClickMessage(message)} className="cursor-pointer">
           <Message from="assistant">
             <MessageContent>
-              <MessageResponse>{parsed.textContent || ''}</MessageResponse>
+              {parsed.thinkingSteps && parsed.thinkingSteps.length > 0 && (
+                <ThinkingBlock steps={parsed.thinkingSteps} />
+              )}
+              {parsed.textContent && (
+                <MessageResponse>{parsed.textContent}</MessageResponse>
+              )}
+              {parsed.inputRequired && onSendResponse && (
+                <InteractiveQuestion
+                  inputRequired={parsed.inputRequired}
+                  onSubmit={onSendResponse}
+                />
+              )}
             </MessageContent>
             <MessageActions>
               <MessageAction tooltip="Copy" onClick={handleCopy}>

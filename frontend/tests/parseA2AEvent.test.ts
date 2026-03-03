@@ -231,6 +231,62 @@ describe('parseA2AEvent', () => {
     });
   });
 
+  describe('thinking data parts', () => {
+    it('should extract thinking steps from data parts with thinking metadata', () => {
+      const event = makeEvent({
+        kind: 'status-update',
+        status: {
+          state: 'working',
+          message: {
+            parts: [
+              {
+                kind: 'data',
+                data: {thinking: 'I need to check the files'},
+                metadata: {kind: 'thinking'},
+              },
+              {
+                kind: 'text',
+                text: '[Tool: Bash]\n{"command": "ls /tmp"}',
+              },
+              {
+                kind: 'text',
+                text: 'Here are the files in /tmp.',
+              },
+            ],
+          },
+        },
+      });
+      const parsed = parseA2AEvent(event, 'display-thinking');
+
+      expect(parsed.type).toBe('tool-call');
+      expect(parsed.thinkingSteps).toEqual(['I need to check the files']);
+      expect(parsed.toolCalls).toHaveLength(1);
+      expect(parsed.toolCalls![0].toolName).toBe('Bash');
+      expect(parsed.textContent).toBe('Here are the files in /tmp.');
+    });
+
+    it('should not include thinking in final terminal status-update', () => {
+      const event = makeEvent({
+        kind: 'status-update',
+        final: true,
+        status: {
+          state: 'completed',
+          message: {
+            parts: [
+              {kind: 'data', data: {thinking: 'Done'}, metadata: {kind: 'thinking'}},
+              {kind: 'text', text: '[Tool: Bash]\n{"command": "ls"}'},
+              {kind: 'text', text: 'Result text'},
+            ],
+          },
+        },
+      });
+      const parsed = parseA2AEvent(event, 'display-final-thinking');
+
+      expect(parsed.type).toBe('task-status');
+      expect(parsed.thinkingSteps).toBeUndefined();
+    });
+  });
+
   describe('context preservation', () => {
     it('should preserve the original event', () => {
       const event = makeEvent({kind: 'message', contextId: 'ctx-123'});

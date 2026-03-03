@@ -106,6 +106,7 @@ export function ChatPanel({
                     key={msg.id}
                     message={msg}
                     onClickMessage={handleClickMessage}
+                    onSendResponse={text => onSendMessage(text, [], {})}
                   />
                 ))}
                 {isLoading && (

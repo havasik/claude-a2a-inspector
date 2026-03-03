@@ -90,6 +90,37 @@ export function useA2AChat(socketRef: RefObject<Socket | null>) {
           }
         }
 
+        // For tool-call with result-only entries: merge output into the
+        // last tool-call message that has a matching tool name without output yet.
+        if (parsed.type === 'tool-call' && parsed.toolCalls) {
+          const resultOnly = parsed.toolCalls.every(tc => !tc.toolInput && tc.toolOutput);
+          if (resultOnly) {
+            // Walk backwards to find the most recent tool-call message to merge into
+            for (let i = prev.length - 1; i >= 0; i--) {
+              const existing = prev[i];
+              if (existing.role === 'agent' && existing.parsedEvent?.type === 'tool-call' && existing.parsedEvent.toolCalls) {
+                const updated = [...prev];
+                const existingCalls = [...existing.parsedEvent.toolCalls];
+                // For each result, find the matching tool call and set its output
+                for (const result of parsed.toolCalls) {
+                  for (let j = existingCalls.length - 1; j >= 0; j--) {
+                    if (existingCalls[j].toolName === result.toolName && !existingCalls[j].toolOutput) {
+                      existingCalls[j] = {...existingCalls[j], toolOutput: result.toolOutput};
+                      break;
+                    }
+                  }
+                }
+                updated[i] = {
+                  ...existing,
+                  rawEvent: event,
+                  parsedEvent: {...existing.parsedEvent, toolCalls: existingCalls},
+                };
+                return updated;
+              }
+            }
+          }
+        }
+
         // Everything else (tool-call, artifact, error, different text): append
         return [...prev, msg];
       });
