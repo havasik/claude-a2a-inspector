@@ -51,10 +51,10 @@ fi
 
 echo -e "${GREEN}Starting A2A Inspector...${NC}"
 
-# Start frontend build in watch mode
-echo -e "${BLUE}Starting frontend build (watch mode)...${NC}"
+# Build frontend first, then start Vite dev server
+echo -e "${BLUE}Starting frontend dev server (Vite)...${NC}"
 cd ./frontend || exit
-npm run build -- --watch 2>&1 | sed "s/^/\\x1b[36m[FRONTEND]\\x1b[0m /" &
+npx vite --port 5173 2>&1 | sed "s/^/\\x1b[36m[FRONTEND]\\x1b[0m /" &
 FRONTEND_PID=$!
 cd - > /dev/null || exit
 

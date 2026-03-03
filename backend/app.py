@@ -57,8 +57,15 @@ sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 socket_app = socketio.ASGIApp(sio)
 app.mount('/socket.io', socket_app)
 
-app.mount('/static', StaticFiles(directory='../frontend/public'), name='static')
-templates = Jinja2Templates(directory='../frontend/public')
+app.mount(
+    '/static', StaticFiles(directory='../frontend/public'), name='static'
+)
+app.mount(
+    '/assets',
+    StaticFiles(directory='../frontend/dist/assets'),
+    name='assets',
+)
+templates = Jinja2Templates(directory='../frontend/dist')
 
 # ==============================================================================
 # State Management

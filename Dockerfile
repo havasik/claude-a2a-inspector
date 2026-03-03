@@ -5,17 +5,16 @@ WORKDIR /app
 # Copy package files and configuration needed for npm ci
 COPY frontend/package*.json ./
 COPY frontend/tsconfig.json ./
+COPY frontend/vite.config.ts ./
+COPY frontend/components.json ./
+COPY frontend/index.html ./
 COPY frontend/src ./src
 
-# Install dependencies (this will run prepare script which needs tsconfig.json and src/)
+# Install dependencies
 RUN npm ci
 
 # Copy remaining files
 COPY frontend/ ./
-
-# Rebuild native dependencies like esbuild for the container's architecture (Alpine)
-# in case host node_modules were copied over.
-RUN npm rebuild esbuild
 
 RUN npm run build
 
@@ -27,8 +26,9 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --no-cache
 RUN uv pip install validators
 COPY backend/ ./backend/
-RUN mkdir -p /app/frontend
+RUN mkdir -p /app/frontend/public /app/frontend/dist
 COPY --from=frontend-builder /app/public /app/frontend/public
+COPY --from=frontend-builder /app/dist /app/frontend/dist
 
 
 WORKDIR /app/backend
@@ -37,5 +37,5 @@ WORKDIR /app/backend
 EXPOSE 8080
 
 # The command to run the server. Because our WORKDIR is now /app/backend,
-# we can simply refer to 'app:app' from the current directory.git 
+# we can simply refer to 'app:app' from the current directory.
 CMD ["uv", "run", "--", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
