@@ -49,23 +49,45 @@ function ValidationBadge({errors}: {errors: string[]}) {
 }
 
 function AttachmentBadges({attachments}: {attachments: Attachment[]}) {
+  const images = attachments.filter(a => a.mimeType.startsWith('image/'));
+  const others = attachments.filter(a => !a.mimeType.startsWith('image/'));
+
   const getIcon = (mimeType: string) => {
-    if (mimeType.startsWith('image/')) return '🖼️';
     if (mimeType.startsWith('audio/')) return '🎵';
     if (mimeType.startsWith('video/')) return '🎬';
     return '📎';
   };
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {attachments.map(a => (
-        <span
-          key={a.id}
-          className="inline-flex items-center gap-1 rounded-full bg-foreground/10 px-2 py-0.5 text-xs"
-        >
-          {getIcon(a.mimeType)} {a.name}
-        </span>
-      ))}
+    <div className="space-y-2">
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {images.map(a => (
+            <div key={a.id} className="overflow-hidden rounded-lg border border-border shadow-sm">
+              <img
+                src={a.thumbnail || `data:${a.mimeType};base64,${a.data}`}
+                alt={a.name}
+                className="max-h-48 max-w-[200px] object-cover"
+              />
+              <div className="bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground truncate">
+                {a.name}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {others.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {others.map(a => (
+            <span
+              key={a.id}
+              className="inline-flex items-center gap-1 rounded-full bg-foreground/10 px-2 py-0.5 text-xs"
+            >
+              {getIcon(a.mimeType)} {a.name}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -85,7 +107,13 @@ function MultimediaPart({part}: {part: A2APart}) {
   }
 
   if (mimeType.startsWith('image/')) {
-    return <img src={src} alt="Attachment" className="max-h-72 max-w-sm rounded-lg" />;
+    return (
+      <div className="overflow-hidden rounded-lg border border-border shadow-sm inline-block">
+        <a href={src} target="_blank" rel="noopener noreferrer">
+          <img src={src} alt="Image attachment" className="max-h-72 max-w-sm object-contain" />
+        </a>
+      </div>
+    );
   }
   if (mimeType.startsWith('audio/')) {
     return <audio controls src={src} className="max-w-sm" />;
