@@ -249,3 +249,188 @@ class TestValidateMessage:
             data['role'] = role_value
         errors = validators.validate_message(data)
         assert "Message from agent must have 'role' set to 'agent'." in errors
+
+
+class TestArkEnvelopeValidation:
+    """Tests for ARK envelope validation."""
+
+    def test_valid_ark_envelope(self):
+        data = {
+            'ark': {
+                'version': '0.1.0',
+                'kind': 'tool-call',
+                'id': 'tc-1',
+                'timestamp': '2024-01-01T00:00:00Z',
+                'payload': {'name': 'search', 'status': 'pending'},
+            }
+        }
+        errors = validators.validate_ark_envelope(data)
+        assert errors == []
+
+    def test_ark_envelope_missing_ark_field(self):
+        errors = validators.validate_ark_envelope({'foo': 'bar'})
+        assert any('missing or invalid "ark"' in e for e in errors)
+
+    def test_ark_envelope_missing_required_fields(self):
+        data = {'ark': {'version': '0.1.0'}}
+        errors = validators.validate_ark_envelope(data)
+        assert any("'ark.kind'" in e for e in errors)
+        assert any("'ark.id'" in e for e in errors)
+        assert any("'ark.timestamp'" in e for e in errors)
+        assert any("'ark.payload'" in e for e in errors)
+
+    def test_ark_envelope_missing_payload(self):
+        data = {
+            'ark': {
+                'version': '0.1.0',
+                'kind': 'text',
+                'id': 'txt-1',
+                'timestamp': '2024-01-01T00:00:00Z',
+            }
+        }
+        errors = validators.validate_ark_envelope(data)
+        assert any("'ark.payload'" in e for e in errors)
+
+    def test_ark_envelope_unknown_kind(self):
+        data = {
+            'ark': {
+                'version': '0.1.0',
+                'kind': 'unknown-kind',
+                'id': 'u-1',
+                'timestamp': '2024-01-01T00:00:00Z',
+                'payload': {},
+            }
+        }
+        errors = validators.validate_ark_envelope(data)
+        assert any("unknown kind 'unknown-kind'" in e for e in errors)
+
+    def test_ark_envelope_all_valid_kinds(self):
+        for kind in [
+            'tool-call', 'input-request', 'input-response',
+            'thought', 'text', 'text-stream',
+        ]:
+            data = {
+                'ark': {
+                    'version': '0.1.0',
+                    'kind': kind,
+                    'id': f'{kind}-1',
+                    'timestamp': '2024-01-01T00:00:00Z',
+                    'payload': {},
+                }
+            }
+            errors = validators.validate_ark_envelope(data)
+            assert not any('unknown kind' in e for e in errors)
+
+    def test_ark_envelope_not_a_dict(self):
+        errors = validators.validate_ark_envelope('not a dict')
+        assert any('must be an object' in e for e in errors)
+
+
+class TestArkInResponseValidation:
+    """Tests for ARK validation within response data."""
+
+    def _make_ark_data_part(self, kind='text', valid=True):
+        envelope = {
+            'ark': {
+                'version': '0.1.0',
+                'kind': kind,
+                'id': f'{kind}-1',
+                'timestamp': '2024-01-01T00:00:00Z',
+                'payload': {'content': 'hello'},
+            }
+        }
+        if not valid:
+            del envelope['ark']['payload']
+        return {'kind': 'data', 'data': envelope}
+
+    def test_response_with_valid_ark_in_parts(self):
+        data = {
+            'kind': 'message',
+            'parts': [self._make_ark_data_part()],
+        }
+        errors = validators.validate_ark_in_response(data)
+        assert errors == []
+
+    def test_response_with_invalid_ark_in_parts(self):
+        data = {
+            'kind': 'message',
+            'parts': [self._make_ark_data_part(valid=False)],
+        }
+        errors = validators.validate_ark_in_response(data)
+        assert len(errors) > 0
+        assert any("'ark.payload'" in e for e in errors)
+
+    def test_response_with_no_ark(self):
+        data = {
+            'kind': 'message',
+            'parts': [{'kind': 'text', 'text': 'hello'}],
+        }
+        errors = validators.validate_ark_in_response(data)
+        assert errors == []
+
+    def test_response_with_ark_in_artifacts(self):
+        data = {
+            'kind': 'task',
+            'artifacts': [
+                {'parts': [self._make_ark_data_part()]},
+            ],
+        }
+        errors = validators.validate_ark_in_response(data)
+        assert errors == []
+
+    def test_response_with_no_parts(self):
+        data = {'kind': 'status-update', 'status': {'state': 'working'}}
+        errors = validators.validate_ark_in_response(data)
+        assert errors == []
+
+
+class TestArkExtensionDetection:
+    """Tests for ARK extension detection from agent card capabilities."""
+
+    def test_card_with_ark_extension(self):
+        """Simulates the detection logic from app.py."""
+        extensions = [
+            {'uri': 'https://ark.a2a-extensions.org/v0.1.0', 'required': False}
+        ]
+        ark_uri = None
+        for ext in extensions:
+            uri = ext.get('uri', '')
+            if uri.startswith('https://ark.a2a-extensions.org/'):
+                ark_uri = uri
+                break
+        assert ark_uri == 'https://ark.a2a-extensions.org/v0.1.0'
+
+    def test_card_without_ark_extension(self):
+        extensions = [
+            {'uri': 'https://other-extension.org/v1', 'required': False}
+        ]
+        ark_uri = None
+        for ext in extensions:
+            uri = ext.get('uri', '')
+            if uri.startswith('https://ark.a2a-extensions.org/'):
+                ark_uri = uri
+                break
+        assert ark_uri is None
+
+    def test_card_with_no_extensions(self):
+        extensions = []
+        ark_uri = None
+        for ext in extensions:
+            uri = ext.get('uri', '')
+            if uri.startswith('https://ark.a2a-extensions.org/'):
+                ark_uri = uri
+                break
+        assert ark_uri is None
+
+    def test_card_with_multiple_extensions_including_ark(self):
+        extensions = [
+            {'uri': 'https://other.org/v1', 'required': True},
+            {'uri': 'https://ark.a2a-extensions.org/v0.2.0', 'required': False},
+        ]
+        ark_uri = None
+        for ext in extensions:
+            uri = ext.get('uri', '')
+            if uri.startswith('https://ark.a2a-extensions.org/'):
+                ark_uri = uri
+                break
+        assert ark_uri == 'https://ark.a2a-extensions.org/v0.2.0'
