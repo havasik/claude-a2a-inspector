@@ -126,6 +126,64 @@ describe('extractArkParts', () => {
     const parts = extractArkParts(response);
     expect(parts).toHaveLength(2);
   });
+
+  it('extracts ARK from artifact-update (singular artifact field)', () => {
+    const response = {
+      kind: 'artifact-update' as const,
+      validation_errors: [],
+      artifact: {
+        artifactId: 'art-1',
+        parts: [
+          {
+            kind: 'data',
+            data: {
+              ark: {
+                version: '0.1.0',
+                kind: 'thought',
+                id: 'th-1',
+                timestamp: '2024-01-01T00:00:00Z',
+                payload: {status: 'complete', step: 1, content: 'thinking'},
+              },
+            },
+          },
+        ],
+      },
+    } satisfies AgentResponseEvent;
+
+    const parts = extractArkParts(response);
+    expect(parts).toHaveLength(1);
+    expect(parts[0].ark.kind).toBe('thought');
+  });
+
+  it('extracts ARK from status-update message parts', () => {
+    const response = {
+      kind: 'status-update' as const,
+      validation_errors: [],
+      status: {
+        state: 'working',
+        message: {
+          parts: [
+            {
+              kind: 'data',
+              data: {
+                ark: {
+                  version: '0.1.0',
+                  kind: 'text-stream',
+                  id: 'ts-1',
+                  timestamp: '2024-01-01T00:00:00Z',
+                  payload: {status: 'streaming', chunk: 'hello', seq: 0},
+                },
+              },
+            },
+          ],
+        },
+      },
+    } satisfies AgentResponseEvent;
+
+    const parts = extractArkParts(response);
+    expect(parts).toHaveLength(1);
+    expect(parts[0].ark.kind).toBe('text-stream');
+  });
 });
 
 describe('extractPlainText', () => {

@@ -65,19 +65,54 @@ export function extractArkParts(response: AgentResponseEvent): ArkEnvelope[] {
     }
   }
 
-  // Check in artifacts for task responses
+  // Check in artifact (singular) for artifact-update responses
+  const artifact = (response as Record<string, unknown>).artifact;
+  if (typeof artifact === 'object' && artifact !== null) {
+    const artifactParts = (artifact as Record<string, unknown>).parts;
+    if (Array.isArray(artifactParts)) {
+      for (const part of artifactParts) {
+        if (typeof part === 'object' && part !== null) {
+          const p = part as Record<string, unknown>;
+          if (p.kind === 'data' && isArkEnvelope(p.data)) {
+            parts.push(p.data as ArkEnvelope);
+          }
+        }
+      }
+    }
+  }
+
+  // Check in artifacts (plural) for task responses
   const artifacts = (response as Record<string, unknown>).artifacts;
   if (Array.isArray(artifacts)) {
-    for (const artifact of artifacts) {
-      if (typeof artifact === 'object' && artifact !== null) {
-        const artifactParts = (artifact as Record<string, unknown>).parts;
-        if (Array.isArray(artifactParts)) {
-          for (const part of artifactParts) {
+    for (const art of artifacts) {
+      if (typeof art === 'object' && art !== null) {
+        const artParts = (art as Record<string, unknown>).parts;
+        if (Array.isArray(artParts)) {
+          for (const part of artParts) {
             if (typeof part === 'object' && part !== null) {
               const p = part as Record<string, unknown>;
               if (p.kind === 'data' && isArkEnvelope(p.data)) {
                 parts.push(p.data as ArkEnvelope);
               }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Check in status.message.parts for status-update responses
+  const status = (response as Record<string, unknown>).status;
+  if (typeof status === 'object' && status !== null) {
+    const statusMsg = (status as Record<string, unknown>).message;
+    if (typeof statusMsg === 'object' && statusMsg !== null) {
+      const msgParts = (statusMsg as Record<string, unknown>).parts;
+      if (Array.isArray(msgParts)) {
+        for (const part of msgParts) {
+          if (typeof part === 'object' && part !== null) {
+            const p = part as Record<string, unknown>;
+            if (p.kind === 'data' && isArkEnvelope(p.data)) {
+              parts.push(p.data as ArkEnvelope);
             }
           }
         }
