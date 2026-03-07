@@ -1,19 +1,66 @@
 @import "tailwindcss";
 @source "../**/*.{ts,tsx}";
+@source "../../node_modules/streamdown/dist/*.js";
+
+/* shadcn/ui compatible CSS variables for ai-elements */
+:root {
+  --radius: 0.625rem;
+  --background: #f0f2f5;
+  --foreground: #1c1e21;
+  --card: #ffffff;
+  --card-foreground: #1c1e21;
+  --popover: #ffffff;
+  --popover-foreground: #1c1e21;
+  --primary: #1877f2;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e6e9;
+  --secondary-foreground: #1c1e21;
+  --muted: #e4e6e9;
+  --muted-foreground: #65676b;
+  --accent: #e4e6e9;
+  --accent-foreground: #1c1e21;
+  --destructive: #d32f2f;
+  --destructive-foreground: #ffffff;
+  --border: #ddd;
+  --input: #ddd;
+  --ring: #1877f2;
+}
+
+.dark {
+  --background: #1a1a1a;
+  --foreground: #e4e6eb;
+  --card: #2a2a2a;
+  --card-foreground: #e4e6eb;
+  --popover: #2a2a2a;
+  --popover-foreground: #e4e6eb;
+  --primary: #2374e1;
+  --primary-foreground: #ffffff;
+  --secondary: #333333;
+  --secondary-foreground: #e4e6eb;
+  --muted: #333333;
+  --muted-foreground: #b0b3b8;
+  --accent: #333333;
+  --accent-foreground: #e4e6eb;
+  --destructive: #d32f2f;
+  --destructive-foreground: #ffffff;
+  --border: #3e4042;
+  --input: #3e4042;
+  --ring: #2374e1;
+}
 
 @theme {
-  --color-bg-primary: #f0f2f5;
-  --color-bg-secondary: #ffffff;
-  --color-bg-tertiary: #e4e6e9;
-  --color-text-primary: #1c1e21;
-  --color-text-secondary: #65676b;
+  --color-bg-primary: var(--background);
+  --color-bg-secondary: var(--card);
+  --color-bg-tertiary: var(--secondary);
+  --color-text-primary: var(--foreground);
+  --color-text-secondary: var(--muted-foreground);
   --color-text-muted: #8a8d91;
-  --color-border: #ddd;
-  --color-input-bg: #ffffff;
-  --color-button-bg: #1877f2;
+  --color-border: var(--border);
+  --color-input-bg: var(--card);
+  --color-button-bg: var(--primary);
   --color-button-hover: #166fe5;
   --color-success: #008000;
-  --color-error: #d32f2f;
+  --color-error: var(--destructive);
   --color-warning: #ff8c00;
 
   --color-kind-task: #e3f2fd;
@@ -21,25 +68,28 @@
   --color-kind-artifact: #e8f5e9;
   --color-kind-message: #f3e5f5;
   --color-kind-error: #ffebee;
-}
 
-.dark {
-  --color-bg-primary: #1a1a1a;
-  --color-bg-secondary: #2a2a2a;
-  --color-bg-tertiary: #333333;
-  --color-text-primary: #e4e6eb;
-  --color-text-secondary: #b0b3b8;
-  --color-text-muted: #8a8d91;
-  --color-border: #3e4042;
-  --color-input-bg: #3a3b3c;
-  --color-button-bg: #2374e1;
-  --color-button-hover: #1a6dd4;
-
-  --color-kind-task: #1a2a3a;
-  --color-kind-status: #2a2a1a;
-  --color-kind-artifact: #1a2a1a;
-  --color-kind-message: #2a1a2a;
-  --color-kind-error: #2a1a1a;
+  /* shadcn/ui theme tokens for ai-elements */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius: 0.625rem;
 }
 
 * {
@@ -74,21 +124,4 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-text-muted);
   border-radius: 3px;
-}
-
-/* Markdown content styling */
-.prose pre {
-  background: var(--color-bg-tertiary);
-  border-radius: 6px;
-  padding: 12px;
-  overflow-x: auto;
-}
-
-.prose code {
-  font-size: 0.875em;
-}
-
-.prose a {
-  color: var(--color-button-bg);
-  text-decoration: underline;
 }

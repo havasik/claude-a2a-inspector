@@ -1,9 +1,26 @@
-import {useCallback, useState} from 'react';
+import {createContext, useCallback, useContext, useState} from 'react';
 import type {AgentResponseEvent, Attachment, ChatMessage} from '../lib/types';
 import {extractPlainText} from '../lib/ark-parser';
 import {generateMessageId} from '../lib/utils';
 
-export function useMessages() {
+interface MessagesContextValue {
+  messages: ChatMessage[];
+  addUserMessage: (content: string, attachments?: Attachment[]) => ChatMessage;
+  addAgentResponse: (response: AgentResponseEvent) => ChatMessage;
+  reset: () => void;
+}
+
+export const MessagesContext = createContext<MessagesContextValue | null>(null);
+
+export function useMessages(): MessagesContextValue {
+  const ctx = useContext(MessagesContext);
+  if (ctx) return ctx;
+
+  // Fallback for backwards compatibility: standalone hook
+  return useMessagesState();
+}
+
+export function useMessagesState(): MessagesContextValue {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const addUserMessage = useCallback(

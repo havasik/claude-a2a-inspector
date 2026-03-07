@@ -4,6 +4,8 @@ import {useSocket} from '../../providers/socket-provider';
 import {useAttachments} from '../../hooks/use-attachments';
 import {formatFileSize, generateMessageId} from '../../lib/utils';
 import type {Attachment} from '../../lib/types';
+import {Button} from '../ui/button';
+import {CornerDownLeftIcon, PaperclipIcon, XIcon} from 'lucide-react';
 
 interface ChatInputProps {
   onSendMessage: (content: string, attachments?: Attachment[]) => void;
@@ -13,6 +15,7 @@ export function ChatInput({onSendMessage}: ChatInputProps) {
   const {state} = useAgentConnection();
   const {emit} = useSocket();
   const [message, setMessage] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {attachments, addFiles, remove, clear} = useAttachments(
     state.inputModes
@@ -26,10 +29,8 @@ export function ChatInput({onSendMessage}: ChatInputProps) {
 
     const msgId = generateMessageId();
 
-    // Add to local message list
     onSendMessage(trimmed, attachments.length > 0 ? attachments : undefined);
 
-    // Emit to backend
     emit('send_message', {
       message: trimmed,
       id: msgId,
@@ -43,6 +44,11 @@ export function ChatInput({onSendMessage}: ChatInputProps) {
 
     setMessage('');
     clear();
+
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   }, [message, attachments, state.contextId, emit, onSendMessage, clear]);
 
   const handleKeyDown = useCallback(
@@ -53,6 +59,17 @@ export function ChatInput({onSendMessage}: ChatInputProps) {
       }
     },
     [handleSend]
+  );
+
+  const handleInput = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setMessage(e.target.value);
+      // Auto-resize textarea
+      const el = e.target;
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    },
+    []
   );
 
   const handleFileChange = useCallback(
@@ -66,29 +83,28 @@ export function ChatInput({onSendMessage}: ChatInputProps) {
   );
 
   return (
-    <div className="border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+    <div className="border-t border-border bg-card p-3">
       {/* Attachment previews */}
       {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1 px-4 pt-2">
+        <div className="flex flex-wrap gap-1.5 mb-2">
           {attachments.map((att, i) => (
             <span
               key={i}
-              className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]"
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-secondary text-muted-foreground"
             >
-              {att.mimeType.startsWith('image/') ? '🖼️' : '📎'} {att.name} (
-              {formatFileSize(att.size)})
+              {att.name}
               <button
                 onClick={() => remove(i)}
-                className="ml-1 hover:text-[var(--color-error)]"
+                className="ml-0.5 hover:text-destructive"
               >
-                ✕
+                <XIcon className="size-3" />
               </button>
             </span>
           ))}
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-4 py-3">
+      <div className="flex items-end gap-2">
         <input
           type="file"
           ref={fileInputRef}
@@ -96,30 +112,45 @@ export function ChatInput({onSendMessage}: ChatInputProps) {
           className="hidden"
           multiple
         />
-        <button
+        <Button
           onClick={() => fileInputRef.current?.click()}
           disabled={!isConnected}
-          className="px-2 py-2 rounded text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50 transition-colors"
-          title="Attach files"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 mb-0.5"
+          type="button"
         >
-          +
-        </button>
-        <input
-          type="text"
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={isConnected ? 'Type a message...' : 'Connect to an agent first'}
-          disabled={!isConnected}
-          className="flex-1 px-3 py-2 rounded-md border border-[var(--color-border)] bg-[var(--color-input-bg)] text-[var(--color-text-primary)] text-sm placeholder:text-[var(--color-text-muted)] disabled:opacity-50"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!isConnected || (!message.trim() && attachments.length === 0)}
-          className="px-4 py-2 rounded-md text-sm font-medium text-white bg-[var(--color-button-bg)] hover:bg-[var(--color-button-hover)] disabled:opacity-50 transition-colors"
-        >
-          Send
-        </button>
+          <PaperclipIcon className="size-4" />
+        </Button>
+
+        <div className="relative flex-1">
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isConnected
+                ? 'Type a message...'
+                : 'Connect to an agent first'
+            }
+            disabled={!isConnected}
+            rows={1}
+            className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 pr-10 text-sm placeholder:text-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <Button
+            onClick={handleSend}
+            disabled={
+              !isConnected || (!message.trim() && attachments.length === 0)
+            }
+            variant="ghost"
+            size="icon-sm"
+            className="absolute bottom-1.5 right-1.5"
+            type="button"
+          >
+            <CornerDownLeftIcon className="size-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

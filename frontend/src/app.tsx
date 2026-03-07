@@ -14,7 +14,7 @@ import {ConnectionBar} from './components/connection/connection-bar';
 import {ChatPanel} from './components/chat/chat-panel';
 import {ChatInput} from './components/chat/chat-input';
 import {DebugPanel, type DebugTab} from './components/debug/debug-panel';
-import {useMessages} from './hooks/use-messages';
+import {useMessagesState, MessagesContext} from './hooks/use-messages';
 import {useDebugLog} from './hooks/use-debug-log';
 import {extractArkParts} from './lib/ark-parser';
 import type {
@@ -28,8 +28,9 @@ function Inspector() {
   const {socket} = useSocket();
   const {state: connState, resetSession, setContextId} = useAgentConnection();
   const {processArkEnvelope, resetArkState} = useArkState();
+  const messagesState = useMessagesState();
   const {messages, addUserMessage, addAgentResponse, reset: resetMessages} =
-    useMessages();
+    messagesState;
   const {logs, addLog, clearLogs} = useDebugLog();
   const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(
     null
@@ -106,19 +107,20 @@ function Inspector() {
   const isConnected = connState.status === 'connected';
 
   return (
+    <MessagesContext.Provider value={messagesState}>
     <div className="flex flex-col h-screen">
       <Header />
       <ConnectionBar />
 
       {/* New Session button */}
       {isConnected && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
-          <span className="text-sm text-[var(--color-text-secondary)]">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
+          <span className="text-sm text-muted-foreground">
             Chat
           </span>
           <button
             onClick={handleNewSession}
-            className="px-3 py-1 text-xs rounded border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+            className="px-3 py-1 text-xs rounded border border-border text-muted-foreground hover:bg-secondary transition-colors"
           >
             New Session
           </button>
@@ -150,6 +152,7 @@ function Inspector() {
 
       <SessionBar />
     </div>
+    </MessagesContext.Provider>
   );
 }
 
