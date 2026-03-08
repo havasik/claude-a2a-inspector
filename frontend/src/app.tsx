@@ -36,17 +36,30 @@ function Inspector() {
     null
   );
   const [debugTab, setDebugTab] = useState<DebugTab>('traffic');
+  const [isAgentWorking, setIsAgentWorking] = useState(false);
 
   // Wire Socket.IO agent_response → messages + ARK state
   useEffect(() => {
     if (!socket) return;
 
     const handleAgentResponse = (data: AgentResponseEvent) => {
+      const r = data as Record<string, unknown>;
+
       // Extract context ID from response if present
-      const contextId =
-        (data as Record<string, unknown>).contextId as string | undefined;
+      const contextId = r.contextId as string | undefined;
       if (contextId) {
         setContextId(contextId);
+      }
+
+      // Track agent working state for thinking indicator
+      if (data.kind === 'status-update') {
+        const status = r.status as Record<string, unknown> | undefined;
+        const state = status?.state as string | undefined;
+        if (state === 'working') {
+          setIsAgentWorking(true);
+        } else if (state === 'completed' || state === 'failed' || r.final) {
+          setIsAgentWorking(false);
+        }
       }
 
       // Accumulate ARK envelopes (chunk assembly)
@@ -59,7 +72,7 @@ function Inspector() {
       // from accumulated state. Non-append events upsert by response id,
       // so tool-call transitions (pending/working/completed) merge into
       // one ChatMessage instead of creating duplicates.
-      if (!(data as Record<string, unknown>).append) {
+      if (!r.append) {
         addAgentResponse(data);
       }
     };
@@ -140,6 +153,7 @@ function Inspector() {
             <ChatPanel
               messages={messages}
               onMessageClick={handleMessageClick}
+              isAgentWorking={isAgentWorking}
             />
             <ChatInput onSendMessage={handleSendMessage} />
           </div>
