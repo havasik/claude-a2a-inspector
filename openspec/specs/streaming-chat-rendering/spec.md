@@ -36,6 +36,28 @@ While an agent is actively streaming a response (text-stream status is `streamin
 - **WHEN** a text-stream event reaches status `done`
 - **THEN** the streaming indicator is removed and only the final rendered markdown remains
 
+### Requirement: Append events do not create duplicate messages
+Streaming `artifact-update` events with `append: true` SHALL NOT create new ChatMessages. Only the first event in a stream (without `append`) creates the message. Subsequent append chunks SHALL only update the ARK state, and the existing ArkMessage component SHALL re-render from accumulated state.
+
+#### Scenario: Streaming chunks produce one message
+- **WHEN** the backend emits 6 artifact-update events for a text-stream (1 initial + 5 with append:true)
+- **THEN** exactly 1 ChatMessage exists in the messages array
+
+#### Scenario: Accumulated text grows with each chunk
+- **WHEN** append:true events arrive with text-stream chunks
+- **THEN** the ARK state accumulates chunks and the ArkMessage re-renders with the growing assembled text
+
+### Requirement: Conversation panel is scrollable
+The conversation panel SHALL be scrollable when content exceeds the viewport height, and SHALL auto-scroll to the latest message during streaming.
+
+#### Scenario: Long conversation is scrollable
+- **WHEN** the conversation contains more messages than fit in the viewport
+- **THEN** the user can scroll up to see earlier messages and scroll down to see recent messages
+
+#### Scenario: Auto-scroll during streaming
+- **WHEN** new agent response content arrives while the user is scrolled to the bottom
+- **THEN** the conversation auto-scrolls to keep the latest content visible
+
 ### Requirement: Message appearance is animated
 New messages entering the chat SHALL animate into view rather than appearing abruptly.
 
