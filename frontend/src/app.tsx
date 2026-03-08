@@ -42,23 +42,24 @@ function Inspector() {
     if (!socket) return;
 
     const handleAgentResponse = (data: AgentResponseEvent) => {
-      const r = data as Record<string, unknown>;
-
       // Extract context ID from response if present
-      if (r.contextId) {
-        setContextId(r.contextId as string);
+      const contextId =
+        (data as Record<string, unknown>).contextId as string | undefined;
+      if (contextId) {
+        setContextId(contextId);
       }
 
-      // Always accumulate ARK envelopes (chunk assembly)
+      // Accumulate ARK envelopes (chunk assembly)
       const arkParts = extractArkParts(data);
       for (const envelope of arkParts) {
         processArkEnvelope(envelope);
       }
 
-      // Only create a ChatMessage for the first event in a stream.
-      // append:true events are continuation chunks — arkState handles
-      // accumulation and ArkMessage re-renders from it.
-      if (!r.append) {
+      // append:true chunks only update arkState — ArkMessage re-renders
+      // from accumulated state. Non-append events upsert by response id,
+      // so tool-call transitions (pending/working/completed) merge into
+      // one ChatMessage instead of creating duplicates.
+      if (!(data as Record<string, unknown>).append) {
         addAgentResponse(data);
       }
     };
@@ -135,7 +136,7 @@ function Inspector() {
       {/* Main content area */}
       <SplitPane
         left={
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full min-h-0">
             <ChatPanel
               messages={messages}
               onMessageClick={handleMessageClick}

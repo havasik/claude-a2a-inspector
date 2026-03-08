@@ -37,18 +37,36 @@ While an agent is actively streaming a response (text-stream status is `streamin
 - **THEN** the streaming indicator is removed and only the final rendered markdown remains
 
 ### Requirement: Append events do not create duplicate messages
-Streaming `artifact-update` events with `append: true` SHALL NOT create new ChatMessages. Only the first event in a stream (without `append`) creates the message. Subsequent append chunks SHALL only update the ARK state, and the existing ArkMessage component SHALL re-render from accumulated state.
+Streaming `agent_response` events with `append: true` SHALL NOT create new ChatMessages. Only non-append events create messages. The ARK state provider handles chunk accumulation, and ArkMessage components re-render from accumulated state.
 
-#### Scenario: Streaming chunks produce one message
-- **WHEN** the backend emits 6 artifact-update events for a text-stream (1 initial + 5 with append:true)
-- **THEN** exactly 1 ChatMessage exists in the messages array
+#### Scenario: Streaming text-stream chunks produce one visual message
+- **WHEN** the backend emits 1 initial artifact-update (no append) followed by 5 append:true chunks for a text-stream
+- **THEN** only 1 ChatMessage is created from the initial event, and ArkMessage renders the growing assembled text from ARK state
 
 #### Scenario: Accumulated text grows with each chunk
 - **WHEN** append:true events arrive with text-stream chunks
-- **THEN** the ARK state accumulates chunks and the ArkMessage re-renders with the growing assembled text
+- **THEN** the ARK state accumulates chunks and the ArkMessage re-renders with the growing assembled text without creating new ChatMessages
+
+### Requirement: Render-time deduplication of duplicate turn events
+Multiple non-append events for the same turn (status-update, artifact-update with different ARK content) all share the same response `id`. The rendering layer SHALL deduplicate these before display using two rules:
+
+1. Empty `status-update` events SHALL be filtered out when `artifact-update` events exist for the same response id (status-updates are protocol noise — artifact-updates carry the actual ARK content).
+2. Multiple `artifact-update` events containing the same ARK envelope id (e.g., tool-call pending/working/completed) SHALL collapse to only the last one, which reflects the final state from ARK accumulated state.
+
+#### Scenario: Tool-call status transitions render as one card
+- **WHEN** the backend emits 3 artifact-update events for the same tool-call ARK id (pending, working, completed)
+- **THEN** only 1 tool card is rendered showing the completed state
+
+#### Scenario: Empty status-updates are hidden
+- **WHEN** the backend emits status-update events with no text content alongside artifact-update events for the same response id
+- **THEN** the status-update messages are not rendered
+
+#### Scenario: Different ARK types in same turn all render
+- **WHEN** a turn contains artifact-updates for a thought, a tool-call, and a text-stream (each with different ARK ids)
+- **THEN** all three render — thought as Reasoning, tool-call as Tool card, text-stream as MessageResponse
 
 ### Requirement: Conversation panel is scrollable
-The conversation panel SHALL be scrollable when content exceeds the viewport height, and SHALL auto-scroll to the latest message during streaming.
+The conversation panel SHALL be scrollable when content exceeds the viewport height. The CSS height chain from the root layout through SplitPane to the ChatPanel component SHALL resolve to bounded pixel heights so the scroll container works. Auto-scroll uses a simple `useEffect` on messages with a scroll-position threshold, not StickToBottom.
 
 #### Scenario: Long conversation is scrollable
 - **WHEN** the conversation contains more messages than fit in the viewport

@@ -380,6 +380,12 @@ async def handle_send_message(sid: str, json_data: dict[str, Any]) -> None:
             )
         )
 
+    # Forward DataParts from frontend (e.g., ARK input-response envelopes)
+    frontend_parts = json_data.get('parts', [])
+    for fp in frontend_parts:
+        if isinstance(fp, dict) and fp.get('type') == 'data' and 'data' in fp:
+            parts.append(DataPart(data=fp['data']))  # type: ignore[arg-type]
+
     message = Message(
         role=Role.user,
         parts=parts,
