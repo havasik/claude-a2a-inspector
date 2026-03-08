@@ -34,9 +34,10 @@ function formatResponseLabel(
 
 interface ArkInputRequestProps {
   envelope: ArkEnvelope;
+  taskId?: string;
 }
 
-export function ArkInputRequest({envelope}: ArkInputRequestProps) {
+export function ArkInputRequest({envelope, taskId}: ArkInputRequestProps) {
   const payload = envelope.ark.payload;
   const requestId = envelope.ark.id;
   const type = payload.type as string;
@@ -76,6 +77,7 @@ export function ArkInputRequest({envelope}: ArkInputRequestProps) {
         message: '',
         id: msgId,
         contextId: connState.contextId,
+        taskId,
         metadata: {},
         attachments: [],
         parts: [{type: 'data', data: arkEnvelope}],
@@ -84,7 +86,7 @@ export function ArkInputRequest({envelope}: ArkInputRequestProps) {
       setResponded(true);
       setResponseValue(value);
     },
-    [responded, type, requestId, emit, connState.contextId, addUserMessage, payload]
+    [responded, type, requestId, emit, connState.contextId, addUserMessage, payload, taskId]
   );
 
   return (

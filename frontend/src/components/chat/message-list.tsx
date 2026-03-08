@@ -141,7 +141,7 @@ function MessageBubbleContent({message, onClick}: MessageBubbleContentProps) {
       {hasArkParts ? (
         <div className="space-y-2">
           {arkParts.map((part, i) => (
-            <ArkMessage key={`${part.ark.id}-${i}`} envelope={part} />
+            <ArkMessage key={`${part.ark.id}-${i}`} envelope={part} taskId={(message.raw as Record<string, unknown> | undefined)?.taskId as string | undefined} />
           ))}
           {message.content && (
             <MessageResponse>{message.content}</MessageResponse>

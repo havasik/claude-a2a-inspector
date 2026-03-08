@@ -76,6 +76,17 @@ The conversation panel SHALL be scrollable when content exceeds the viewport hei
 - **WHEN** new agent response content arrives while the user is scrolled to the bottom
 - **THEN** the conversation auto-scrolls to keep the latest content visible
 
+### Requirement: Backend deduplicates SSE fan-out events
+When multiple `send_message` calls subscribe to the same A2A task (e.g., the original request stream and an input-response stream), the A2A server fans events to all subscribers. The backend SHALL deduplicate these events before emitting to the frontend, using a content fingerprint per session. Events with identical content (excluding the wrapping response id) SHALL be emitted only once.
+
+#### Scenario: Duplicate SSE events are suppressed
+- **WHEN** the same task event arrives on two SSE streams (original request + input-response)
+- **THEN** the backend emits the event to the frontend only once
+
+#### Scenario: Dedup state is cleaned up on disconnect
+- **WHEN** a client disconnects
+- **THEN** the backend clears the dedup fingerprint set for that session
+
 ### Requirement: Message appearance is animated
 New messages entering the chat SHALL animate into view rather than appearing abruptly.
 

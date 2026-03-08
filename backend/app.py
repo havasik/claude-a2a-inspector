@@ -1,3 +1,4 @@
+import hashlib
 import logging
 
 from datetime import datetime, timezone
@@ -73,6 +74,8 @@ ARK_EXTENSION_URI_PREFIX = 'https://ark.a2a-extensions.org/'
 
 # Tuple: (httpx_client, a2a_client, card, transport_protocol, ark_extension_uri)
 clients: dict[str, tuple[httpx.AsyncClient, Client, AgentCard, str, str | None]] = {}
+# Track emitted event fingerprints per session to deduplicate SSE fan-out
+_emitted_events: dict[str, set[str]] = {}
 
 
 # ==============================================================================
@@ -117,6 +120,18 @@ async def _process_a2a_response(
     response_id = getattr(event, 'id', request_id)
 
     response_data = event.model_dump(exclude_none=True)
+
+    # Deduplicate SSE fan-out: when multiple send_message calls subscribe
+    # to the same task, each event arrives on every stream. Fingerprint
+    # by the event content (before we overwrite 'id') to skip duplicates.
+    fingerprint = hashlib.md5(
+        str(response_data).encode(), usedforsecurity=False
+    ).hexdigest()
+    seen = _emitted_events.setdefault(sid, set())
+    if fingerprint in seen:
+        return
+    seen.add(fingerprint)
+
     response_data['id'] = response_id
 
     validation_errors = validators.validate_message(response_data)
@@ -254,6 +269,7 @@ async def handle_disconnect(sid: str) -> None:
         httpx_client, _, _, _, _ = clients.pop(sid)
         await httpx_client.aclose()
         logger.info(f'Cleaned up client for {sid}')
+    _emitted_events.pop(sid, None)
 
 
 @sio.on('initialize_client')
@@ -342,6 +358,7 @@ async def handle_send_message(sid: str, json_data: dict[str, Any]) -> None:
 
     message_id = json_data.get('id', str(uuid4()))
     context_id = json_data.get('contextId')
+    task_id = json_data.get('taskId')
     metadata = json_data.get('metadata', {})
 
     if sid not in clients:
@@ -391,6 +408,7 @@ async def handle_send_message(sid: str, json_data: dict[str, Any]) -> None:
         parts=parts,
         message_id=message_id,
         context_id=context_id,
+        task_id=task_id,
         metadata=metadata,
         extensions=[ark_uri] if ark_uri else None,
     )

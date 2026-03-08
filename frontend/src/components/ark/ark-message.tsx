@@ -20,6 +20,7 @@ import {ArkInputRequest} from './ark-input-request';
 
 interface ArkMessageProps {
   envelope: ArkEnvelope;
+  taskId?: string;
 }
 
 /**
@@ -41,7 +42,7 @@ function mapToolStatus(
   }
 }
 
-export function ArkMessage({envelope}: ArkMessageProps) {
+export function ArkMessage({envelope, taskId}: ArkMessageProps) {
   const {arkState} = useArkState();
   const {kind, id} = envelope.ark;
   const accumulated = arkState.events.get(id);
@@ -118,7 +119,7 @@ export function ArkMessage({envelope}: ArkMessageProps) {
     }
 
     case 'input-request':
-      return <ArkInputRequest envelope={envelope} />;
+      return <ArkInputRequest envelope={envelope} taskId={taskId} />;
 
     case 'input-response':
       return (
