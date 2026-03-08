@@ -42,19 +42,24 @@ function Inspector() {
     if (!socket) return;
 
     const handleAgentResponse = (data: AgentResponseEvent) => {
-      const msg = addAgentResponse(data);
+      const r = data as Record<string, unknown>;
 
       // Extract context ID from response if present
-      const contextId =
-        (data as Record<string, unknown>).contextId as string | undefined;
-      if (contextId) {
-        setContextId(contextId);
+      if (r.contextId) {
+        setContextId(r.contextId as string);
       }
 
-      // Detect and accumulate ARK envelopes
+      // Always accumulate ARK envelopes (chunk assembly)
       const arkParts = extractArkParts(data);
       for (const envelope of arkParts) {
         processArkEnvelope(envelope);
+      }
+
+      // Only create a ChatMessage for the first event in a stream.
+      // append:true events are continuation chunks — arkState handles
+      // accumulation and ArkMessage re-renders from it.
+      if (!r.append) {
+        addAgentResponse(data);
       }
     };
 

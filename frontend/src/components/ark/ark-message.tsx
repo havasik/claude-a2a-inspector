@@ -110,7 +110,6 @@ export function ArkMessage({envelope}: ArkMessageProps) {
     case 'text-stream': {
       const assembled = accumulated?.assembled || '';
       const isDone = status === 'done';
-
       if (!assembled && !isDone) {
         return <Shimmer>Generating response...</Shimmer>;
       }

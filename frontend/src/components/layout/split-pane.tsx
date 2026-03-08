@@ -38,7 +38,7 @@ export function SplitPane({left, right, defaultSplit = 55}: SplitPaneProps) {
   return (
     <div ref={containerRef} className="flex flex-1 overflow-hidden">
       <div
-        className="overflow-hidden flex flex-col"
+        className="overflow-hidden flex flex-col h-full"
         style={{width: `${splitPercent}%`}}
       >
         {left}
@@ -48,7 +48,7 @@ export function SplitPane({left, right, defaultSplit = 55}: SplitPaneProps) {
         className="w-1 cursor-col-resize bg-[var(--color-border)] hover:bg-[var(--color-button-bg)] transition-colors flex-shrink-0"
       />
       <div
-        className="overflow-hidden flex flex-col"
+        className="overflow-hidden flex flex-col h-full"
         style={{width: `${100 - splitPercent}%`}}
       >
         {right}
