@@ -9,17 +9,6 @@ if (typeof global.btoa === 'undefined') {
   global.btoa = (str: string) => Buffer.from(str, 'binary').toString('base64');
 }
 
-// Mock matchMedia for theme tests
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
-  }),
-});
+if (typeof global.atob === 'undefined') {
+  global.atob = (str: string) => Buffer.from(str, 'base64').toString('binary');
+}

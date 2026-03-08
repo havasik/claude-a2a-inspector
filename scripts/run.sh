@@ -54,7 +54,7 @@ echo -e "${GREEN}Starting A2A Inspector...${NC}"
 # Build frontend first, then start Vite dev server
 echo -e "${BLUE}Starting frontend dev server (Vite)...${NC}"
 cd ./frontend || exit
-npx vite --port 5173 2>&1 | sed "s/^/\\x1b[36m[FRONTEND]\\x1b[0m /" &
+npm run watch 2>&1 | sed "s/^/\\x1b[36m[FRONTEND]\\x1b[0m /" &
 FRONTEND_PID=$!
 cd - > /dev/null || exit
 

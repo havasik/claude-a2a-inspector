@@ -8,15 +8,15 @@ import type {
   ThemedToken,
 } from "shiki";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "../ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+} from "../ui/select";
+import { cn } from "../../lib/utils";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
   createContext,
@@ -522,7 +522,6 @@ export const CodeBlockLanguageSelectorTrigger = ({
       "h-7 border-none bg-transparent px-2 text-xs shadow-none",
       className
     )}
-    size="sm"
     {...props}
   />
 );

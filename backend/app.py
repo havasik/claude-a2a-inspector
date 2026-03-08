@@ -1,5 +1,7 @@
+import hashlib
 import logging
 
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
@@ -14,6 +16,7 @@ from a2a.client.client import Client, ClientConfig, ClientEvent
 from a2a.client.client_factory import ClientFactory
 from a2a.types import (
     AgentCard,
+    DataPart,
     FilePart,
     FileWithBytes,
     Message,
@@ -74,7 +77,12 @@ templates = Jinja2Templates(directory='../frontend/dist')
 # NOTE: This global dictionary stores state. For a simple inspector tool with
 # transient connections, this is acceptable. For a scalable production service,
 # a more robust state management solution (e.g., Redis) would be required.
-clients: dict[str, tuple[httpx.AsyncClient, Client, AgentCard, str]] = {}
+ARK_EXTENSION_URI_PREFIX = 'https://ark.a2a-extensions.org/'
+
+# Tuple: (httpx_client, a2a_client, card, transport_protocol, ark_extension_uri)
+clients: dict[str, tuple[httpx.AsyncClient, Client, AgentCard, str, str | None]] = {}
+# Track emitted event fingerprints per session to deduplicate SSE fan-out
+_emitted_events: dict[str, set[str]] = {}
 
 
 # ==============================================================================
@@ -119,9 +127,23 @@ async def _process_a2a_response(
     response_id = getattr(event, 'id', request_id)
 
     response_data = event.model_dump(exclude_none=True)
+
+    # Deduplicate SSE fan-out: when multiple send_message calls subscribe
+    # to the same task, each event arrives on every stream. Fingerprint
+    # by the event content (before we overwrite 'id') to skip duplicates.
+    fingerprint = hashlib.md5(
+        str(response_data).encode(), usedforsecurity=False
+    ).hexdigest()
+    seen = _emitted_events.setdefault(sid, set())
+    if fingerprint in seen:
+        return
+    seen.add(fingerprint)
+
     response_data['id'] = response_id
 
     validation_errors = validators.validate_message(response_data)
+    ark_errors = validators.validate_ark_in_response(response_data)
+    validation_errors.extend(ark_errors)
     response_data['validation_errors'] = validation_errors
 
     await _emit_debug_log(sid, response_id, 'response', response_data)
@@ -251,9 +273,10 @@ async def handle_disconnect(sid: str) -> None:
     """Handle the 'disconnect' socket.io event."""
     logger.info(f'Client disconnected: {sid}')
     if sid in clients:
-        httpx_client, _, _, _ = clients.pop(sid)
+        httpx_client, _, _, _, _ = clients.pop(sid)
         await httpx_client.aclose()
         logger.info(f'Cleaned up client for {sid}')
+    _emitted_events.pop(sid, None)
 
 
 @sio.on('initialize_client')
@@ -293,7 +316,21 @@ async def handle_initialize_client(sid: str, data: dict[str, Any]) -> None:
             card.preferred_transport or TransportProtocol.jsonrpc
         )
 
-        clients[sid] = (httpx_client, a2a_client, card, transport_protocol)
+        # Detect ARK extension support in agent card
+        ark_extension_uri: str | None = None
+        capabilities = getattr(card, 'capabilities', None)
+        if capabilities:
+            extensions = getattr(capabilities, 'extensions', None) or []
+            for ext in extensions:
+                uri = getattr(ext, 'uri', '') or ''
+                if uri.startswith(ARK_EXTENSION_URI_PREFIX):
+                    ark_extension_uri = uri
+                    logger.info(f'ARK extension detected for {sid}: {uri}')
+                    break
+
+        clients[sid] = (
+            httpx_client, a2a_client, card, transport_protocol, ark_extension_uri
+        )
 
         input_modes = getattr(card, 'default_input_modes', ['text/plain'])
         output_modes = getattr(card, 'default_output_modes', ['text/plain'])
@@ -305,6 +342,7 @@ async def handle_initialize_client(sid: str, data: dict[str, Any]) -> None:
                 'transport': str(transport_protocol),
                 'inputModes': input_modes,
                 'outputModes': output_modes,
+                'arkSupported': ark_extension_uri is not None,
             },
             to=sid,
         )
@@ -327,6 +365,7 @@ async def handle_send_message(sid: str, json_data: dict[str, Any]) -> None:
 
     message_id = json_data.get('id', str(uuid4()))
     context_id = json_data.get('contextId')
+    task_id = json_data.get('taskId')
     metadata = json_data.get('metadata', {})
 
     if sid not in clients:
@@ -337,12 +376,23 @@ async def handle_send_message(sid: str, json_data: dict[str, Any]) -> None:
         )
         return
 
-    _, a2a_client, _, transport = clients[sid]
+    _, a2a_client, _, transport, ark_uri = clients[sid]
 
     attachments = json_data.get('attachments', [])
 
     parts: list = []
-    if message_text:
+    if ark_uri and message_text:
+        ark_envelope = {
+            'ark': {
+                'version': '0.1.0',
+                'kind': 'text',
+                'id': message_id,
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'payload': {'content': str(message_text)},
+            }
+        }
+        parts.append(DataPart(data=ark_envelope))  # type: ignore[arg-type]
+    elif message_text:
         parts.append(TextPart(text=str(message_text)))  # type: ignore[arg-type]
 
     for attachment in attachments:
@@ -354,12 +404,20 @@ async def handle_send_message(sid: str, json_data: dict[str, Any]) -> None:
             )
         )
 
+    # Forward DataParts from frontend (e.g., ARK input-response envelopes)
+    frontend_parts = json_data.get('parts', [])
+    for fp in frontend_parts:
+        if isinstance(fp, dict) and fp.get('type') == 'data' and 'data' in fp:
+            parts.append(DataPart(data=fp['data']))  # type: ignore[arg-type]
+
     message = Message(
         role=Role.user,
         parts=parts,
         message_id=message_id,
         context_id=context_id,
+        task_id=task_id,
         metadata=metadata,
+        extensions=[ark_uri] if ark_uri else None,
     )
 
     debug_request = {

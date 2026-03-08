@@ -7,8 +7,8 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
+} from "../ui/collapsible";
+import { cn } from "../../lib/utils";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
@@ -217,7 +217,7 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown plugins={streamdownPlugins} {...props}>
+      <Streamdown plugins={streamdownPlugins}>
         {children}
       </Streamdown>
     </CollapsibleContent>

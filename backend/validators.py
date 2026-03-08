@@ -107,6 +107,86 @@ def _validate_message(data: dict[str, Any]) -> list[str]:
     return errors
 
 
+ARK_VALID_KINDS = frozenset([
+    'tool-call', 'input-request', 'input-response',
+    'thought', 'text', 'text-stream',
+])
+
+
+def validate_ark_envelope(data: dict[str, Any]) -> list[str]:
+    """Validate an ARK envelope structure."""
+    errors: list[str] = []
+    if not isinstance(data, dict):
+        return ['ARK: envelope must be an object.']
+
+    ark = data.get('ark')
+    if not isinstance(ark, dict):
+        return ['ARK: missing or invalid "ark" field.']
+
+    for field in ('version', 'kind', 'id', 'timestamp'):
+        if field not in ark or not isinstance(ark[field], str):
+            errors.append(f"ARK: missing or invalid field 'ark.{field}'.")
+
+    if 'payload' not in ark or not isinstance(ark.get('payload'), dict):
+        errors.append("ARK: missing or invalid field 'ark.payload'.")
+
+    kind = ark.get('kind')
+    if isinstance(kind, str) and kind not in ARK_VALID_KINDS:
+        errors.append(f"ARK: unknown kind '{kind}'.")
+
+    return errors
+
+
+def _find_ark_envelopes_in_parts(parts: list) -> list[dict[str, Any]]:
+    """Extract potential ARK envelopes from a list of parts."""
+    envelopes: list[dict[str, Any]] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        # DataPart with kind "data"
+        if part.get('kind') == 'data' and isinstance(part.get('data'), dict):
+            data_obj = part['data']
+            if 'ark' in data_obj:
+                envelopes.append(data_obj)
+        # Direct ARK envelope in part
+        if 'ark' in part and isinstance(part.get('ark'), dict):
+            envelopes.append(part)
+    return envelopes
+
+
+def validate_ark_in_response(data: dict[str, Any]) -> list[str]:
+    """Scan response data for ARK envelopes and validate them."""
+    errors: list[str] = []
+
+    # Check parts
+    parts = data.get('parts', [])
+    if isinstance(parts, list):
+        for envelope in _find_ark_envelopes_in_parts(parts):
+            errors.extend(validate_ark_envelope(envelope))
+
+    # Check artifacts
+    artifacts = data.get('artifacts', [])
+    if isinstance(artifacts, list):
+        for artifact in artifacts:
+            if isinstance(artifact, dict):
+                artifact_parts = artifact.get('parts', [])
+                if isinstance(artifact_parts, list):
+                    for envelope in _find_ark_envelopes_in_parts(artifact_parts):
+                        errors.extend(validate_ark_envelope(envelope))
+
+    # Check status message parts
+    status = data.get('status')
+    if isinstance(status, dict):
+        msg = status.get('message')
+        if isinstance(msg, dict):
+            msg_parts = msg.get('parts', [])
+            if isinstance(msg_parts, list):
+                for envelope in _find_ark_envelopes_in_parts(msg_parts):
+                    errors.extend(validate_ark_envelope(envelope))
+
+    return errors
+
+
 def validate_message(data: dict[str, Any]) -> list[str]:
     """Validate an incoming message from the agent based on its kind."""
     if 'kind' not in data:
